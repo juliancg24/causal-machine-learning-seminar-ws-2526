@@ -1,0 +1,584 @@
+\documentclass[aspectratio=169,hyperref={pdfpagelabels=false}]{beamer}
+\usepackage[utf8]{inputenc}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{centernot}
+\usepackage{bm}
+\usepackage{verbatimbox}
+\usepackage{caption}
+\usepackage{subcaption}
+\captionsetup[subfigure]{labelfont=bf,textfont=normalfont,singlelinecheck=off,justification=raggedright}
+
+\usetheme{Singapore}
+\usecolortheme{default}
+
+\inputencoding{utf8}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{caption}[]
+\setbeamertemplate{itemize items}[circle]
+\setbeamertemplate{bibliography entry title}{}
+\setbeamertemplate{bibliography entry location}{}
+\setbeamertemplate{bibliography entry note}{}
+  
+\definecolor{blue}{HTML}{00376c}
+\setbeamercolor{itemize item}{fg=blue}
+\setbeamercolor{itemize subitem}{fg=blue}
+\setbeamercolor{alerted text}{fg=blue}
+\setbeamercolor{enumerate item}{fg=black}
+\setbeamercolor{caption name}{fg=black}
+\setbeamercolor{title}{fg=blue}
+\setbeamercolor{frametitle}{fg=blue}
+\setbeamercolor{structure}{fg=blue}
+\setbeamercolor{section in head/foot}{fg=blue,bg=white}
+\setbeamercolor{title in head/foot}{fg=black,bg=white}
+
+\setbeamertemplate{frametitle}[default][left]
+
+\setbeamertemplate{headline}{
+	\begin{beamercolorbox}[wd=0.9\paperwidth, left]{section in head/foot}
+		\insertnavigation{0.9\paperwidth}  		\vskip-18pt
+	\end{beamercolorbox} 
+	\hfill
+	\begin{beamercolorbox}[wd=0.09\paperwidth, right]{section in head/foot}
+			\vskip2pt	\includegraphics[scale=.06]{husiegel.png} \hskip2pt	
+	\end{beamercolorbox}   }
+
+\setbeamertemplate{footline}{\hbox{
+	\begin{beamercolorbox}[wd=0.3\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}
+		\insertshortauthor  
+    \end{beamercolorbox}
+ 	\begin{beamercolorbox}[wd=0.4\paperwidth, center]{section in head/foot}
+		\insertshorttitle
+	 \end{beamercolorbox} 
+	\begin{beamercolorbox}[wd=0.3\paperwidth, center]{section in head/foot}
+		\insertpagenumber /\insertpresentationendpage
+	\end{beamercolorbox} 
+}}
+
+\author{Juian Cantor}
+\institute{\normalsize Humboldt-Universität zu Berlin}
+\title[Double ML for Causal Effects]{\Large \textsc{Double / Debiased Machine Learning for Causal Treatment Effects}}
+\subtitle{\large Causal Machine Learning Seminar}
+\date{\scriptsize \today}
+
+\begin{document}
+
+\makeatletter
+\let\old@beamer@writeslidentry\beamer@writeslidentry
+\def\beamer@writeslidentry{%
+	\expandafter\beamer@ifempty\expandafter{\beamer@framestartpage}{}% does not happen normally
+	{%else
+		\clearpage\beamer@notesactions%
+	}
+}
+\makeatother
+
+%------------------------------------------------
+% Title slide
+%------------------------------------------------
+
+\begin{frame}[plain, t]
+	\hfill \includegraphics[scale=.1]{husiegel.png}
+	\vspace{-15pt} 
+	\titlepage
+\end{frame}
+
+\makeatletter
+\let\beamer@writeslidentry\old@beamer@writeslidentry
+\makeatother
+
+%------------------------------------------------
+\section{Motivation \& Question}
+\subsection*{}
+
+\begin{frame}{The problem: causal effects with many covariates}
+  \begin{itemize}
+    \item Observational data with many potential confounders $X \in \mathbb{R}^p$
+    \item We want a low-dimensional causal parameter $\theta_0$:
+      \begin{itemize}
+        \item e.g.\ ATE, regression coefficient, IV effect
+      \end{itemize}
+    \item Classical low-dimensional models: risk of misspecification when $p$ is large
+    \item Modern ML: excellent at predicting $Y$, but tuned for \emph{prediction loss}, not for $\theta_0$
+    \item Question: \alert{How can we combine ML with econometric identification to get valid $\sqrt{n}$-inference for $\theta_0$?}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Prediction vs.\ causal estimation}
+  \begin{itemize}
+    \item ML goal: approximate $x \mapsto \mathbb{E}[Y \mid X=x]$ (random forests, boosting, nets, \dots)
+    \item Causal goal: estimate functional $\theta_0 = \theta(P)$ defined by a \emph{moment condition}
+      \[
+        \mathbb{E}_P[\psi(W; \theta_0, \eta_0)] = 0, \qquad W = (Y,D,X).
+      \]
+    \item Naive idea: fit a flexible ML model for $Y$ on $(D,X)$ and ``read off'' the effect of $D$
+    \item Problem (sketch): regularization bias in nuisance functions $\eta_0$ contaminates the estimator of $\theta_0$ so that it \emph{fails} to be $\sqrt{n}$-consistent
+    \item We will make this precise using \alert{moment conditions} and a \alert{bias decomposition}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Why econometricians love moment conditions}
+  \begin{itemize}
+    \item Many causal/econometric parameters are defined by
+      \[
+        \mathbb{E}\big[\psi(W;\theta_0,\eta_0)\big] = 0.
+      \]
+    \item Examples:
+      \begin{itemize}
+        \item OLS: $\mathbb{E}[X(Y - X'\beta_0)] = 0$
+        \item IV: $\mathbb{E}[Z(Y - D\theta_0)] = 0$
+        \item GMM: stacked moment conditions $m(W;\theta_0) = 0$
+      \end{itemize}
+    \item Advantages:
+      \begin{itemize}
+        \item Clean separation between \textbf{target} $\theta_0$ and \textbf{nuisance} $\eta_0$
+        \item Robustness tools (orthogonal / efficient scores) are defined at the level of moments
+        \item We can plug in ML estimators for $\eta_0$ and study the resulting bias in $\theta_0$
+      \end{itemize}
+    \item So we start from moment conditions for $\theta_0$, not from a particular estimator.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Moment conditions in the partially linear model}
+  \begin{itemize}
+    \item Partially linear regression (PLR):
+      \[
+        Y = \theta_0 D + g_0(X) + U,\quad \mathbb{E}[U \mid D,X]=0,
+      \]
+      \[
+        D = m_0(X) + V,\quad \mathbb{E}[V \mid X]=0.
+      \]
+    \item Three key moment conditions for $\theta_0$:
+      \begin{enumerate}
+        \item Regression adjustment: $\mathbb{E}\big[(Y - D\theta_0 - g_0(X))\,D\big] = 0$.
+        \item Propensity-score-style adjustment: $\mathbb{E}\big[(Y - D\theta_0)\,(D - m_0(X))\big]=0$.
+        \item Neyman-orthogonal (residual) score: $\mathbb{E}\big[(Y - D\theta_0 - g_0(X))\,(D - m_0(X))\big]=0$.
+      \end{enumerate}
+    \item All three identify the same $\theta_0$ \emph{if} $g_0,m_0$ were known exactly.
+    \item But they behave very differently once we replace $g_0,m_0$ by ML estimates.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Key idea (for applied work)}
+  \begin{itemize}
+    \item \textbf{Practical takeaway:}
+      \begin{itemize}
+        \item To safely combine ML with econometrics, we:
+        \begin{enumerate}
+          \item Express $\theta_0$ via a suitable moment condition,
+          \item Choose a \alert{Neyman-orthogonal} score (locally insensitive to nuisance errors),
+          \item Estimate nuisance functions with ML + \alert{cross-fitting}.
+        \end{enumerate}
+      \end{itemize}
+    \item This makes ML mistakes in $\eta_0$ \alert{second order} for $\theta_0$,
+      so we keep $\sqrt{n}$-rates and valid asymptotic normality.
+    \item Intuition: residualize $Y$ and $D$ with ML, then do a simple linear regression / IV-style step.
+    \item Plan:
+      \begin{itemize}
+        \item Methods: orthogonal score, bias decomposition, cross-fitting
+        \item Evidence: simulations + 401(k) application
+        \item Critique \& checklist: when DML is (and is not) a good idea
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\section{Methods: Double / Debiased ML}
+\subsection*{}
+
+\begin{frame}{Naive regression adjustment: bias decomposition (1/2)}
+  \begin{itemize}
+    \item Start from regression-adjustment moment:
+      \[
+        \mathbb{E}[(Y - D\theta_0 - g_0(X))D] = 0.
+      \]
+    \item Plug-in estimator (using sample splitting for clarity):
+      \[
+        \hat\theta_{\text{RA}}
+        = \Big( \tfrac{1}{n}\sum D_i^2 \Big)^{-1}
+          \Big( \tfrac{1}{n}\sum D_i (Y_i - \hat g(X_i)) \Big).
+      \]
+    \item Decompose
+      \[
+        \sqrt{n}(\hat\theta_{\text{RA}} - \theta_0) = A_n + B_n,
+      \]
+      where
+      \[
+        A_n = (E[D^2])^{-1}\frac{1}{\sqrt{n}}\sum D_i U_i,
+      \]
+      \[
+        B_n \approx (E[D^2])^{-1}\frac{1}{\sqrt{n}}\sum m_0(X_i)\big( g_0(X_i) - \hat g(X_i)\big).
+      \]
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Naive regression adjustment: bias decomposition (2/2)}
+  \begin{itemize}
+    \item Recall the decomposition:
+      \[
+        \sqrt{n}(\hat\theta_{\text{RA}} - \theta_0) = A_n + B_n,
+      \]
+    \item $A_n = (E[D^2])^{-1}\frac{1}{\sqrt{n}}\sum D_i U_i$ is well-behaved:
+      \begin{itemize}
+        \item CLT applies $\Rightarrow$ asymptotically normal.
+      \end{itemize}
+    \item $B_n \approx (E[D^2])^{-1}\frac{1}{\sqrt{n}}\sum m_0(X_i)\big( g_0(X_i) - \hat g(X_i)\big)$ is the \alert{regularization bias term}:
+      \begin{itemize}
+        \item With ML, $\|g_0 - \hat g\|_{L_2} = n^{-\varphi_g}$ with $\varphi_g < 1/2$ typically.
+        \item So $B_n$ does \emph{not} vanish at $\sqrt{n}$-scale.
+      \end{itemize}
+    \item Conclusion: $\hat\theta_{\text{RA}}$ is generally \alert{not $\sqrt{n}$-consistent}.
+    \item Key insight: the bias enters \alert{linearly} through $g_0 - \hat g$, making it first-order.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Orthogonal (residual) score: bias decomposition (1/2)}
+  \begin{itemize}
+    \item Orthogonal (Neyman) score for PLR:
+      \[
+        \psi(W;\theta,g,m) = (Y - \theta D - g(X))\,(D - m(X)).
+      \]
+    \item Define DML estimator $\tilde\theta$ as the solution of
+      \[
+        \frac{1}{n}\sum \psi(W_i;\tilde\theta,\hat g,\hat m) = 0
+        \quad\Rightarrow\quad
+        \tilde\theta = 
+          \frac{\tfrac{1}{n}\sum (D_i - \hat m(X_i))(Y_i - \hat g(X_i))}
+               {\tfrac{1}{n}\sum (D_i - \hat m(X_i))^2}.
+      \]
+    \item Decompose
+      \[
+        \sqrt{n}(\tilde\theta - \theta_0) = A_n^* + B_n^* + C_n^*.
+      \]
+    \item Leading term:
+      \[
+        A_n^* = (E[V^2])^{-1} \frac{1}{\sqrt{n}}\sum V_i U_i
+        \quad\Rightarrow\quad A_n^* \overset{d}{\to} \mathcal{N}(0,\sigma^2).
+      \]
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Orthogonal (residual) score: bias decomposition (2/2)}
+  \begin{itemize}
+    \item Recall the decomposition:
+      \[
+        \sqrt{n}(\tilde\theta - \theta_0) = A_n^* + B_n^* + C_n^*.
+      \]
+    \item $A_n^*$ is the well-behaved leading term (asymptotically normal).
+    \item $B_n^*$ is the bias term, but now it involves a \alert{\emph{product}} of nuisance errors:
+      \[
+        B_n^* = (E[V^2])^{-1}\frac{1}{\sqrt{n}}\sum
+          (\hat m(X_i) - m_0(X_i))(\hat g(X_i) - g_0(X_i)).
+      \]
+    \item If $\|\hat m - m_0\|=n^{-\varphi_m}$ and $\|\hat g - g_0\|=n^{-\varphi_g}$,
+      then $B_n^* = O_p\big(\sqrt{n}\,n^{-(\varphi_m+\varphi_g)}\big)$.
+    \item As soon as $\varphi_m + \varphi_g > 1/2$, we have $B_n^* = o_p(1)$.
+    \item Key insight: \alert{ML can be slow (e.g., $\varphi_g = \varphi_m = 1/4$), yet bias is still negligible at $\sqrt{n}$-scale}.
+    \item This is the power of orthogonal scores: bias is now \alert{second-order}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Neyman orthogonality: definition (1/2)}
+  \begin{itemize}
+    \item General setup: parameter $\theta_0$ and nuisance $\eta_0$ solve
+      \[
+        \mathbb{E}[\psi(W;\theta_0,\eta_0)] = 0.
+      \]
+    \item \textbf{Neyman orthogonality}:
+      \[
+        \partial_\eta \,\mathbb{E}[\psi(W;\theta_0,\eta)]\big|_{\eta=\eta_0}
+        [\eta - \eta_0] = 0
+        \quad\text{for all admissible directions } \eta - \eta_0.
+      \]
+      (Gateaux derivative of the moment w.r.t.\ $\eta$ vanishes at $\eta_0$.)
+    \item Interpretation:
+      \begin{itemize}
+        \item Moment condition is \alert{locally insensitive} to small errors in $\eta$.
+        \item First-order bias from estimating $\eta_0$ cancels; remaining bias is second-order.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Neyman orthogonality: PLR example (2/2)}
+  \begin{itemize}
+    \item Recall the orthogonal score for PLR:
+      \[
+        \psi(W;\theta,g,m) = (Y - \theta D - g(X))(D - m(X)).
+      \]
+    \item At the true parameter values $(\theta_0, g_0, m_0)$, we have:
+      \[
+        \mathbb{E}[\psi(W;\theta_0,g_0,m_0)] = 0.
+      \]
+    \item One can verify that this score satisfies Neyman orthogonality:
+      \[
+        \partial_{(g,m)}\,\mathbb{E}[\psi(W;\theta_0,g,m)]\big|_{(g,m)=(g_0,m_0)} = 0.
+      \]
+    \item This is the key structural reason why DML works with high-dimensional ML.
+    \item The orthogonality property ensures that errors in estimating $(g_0, m_0)$ only affect the bias at second order.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Residual interpretation \& IV-style view (1/2)}
+  \begin{itemize}
+    \item Define residuals using ML nuisances:
+      \[
+        \tilde Y_i := Y_i - \hat g(X_i),
+        \qquad
+        \tilde D_i := D_i - \hat m(X_i).
+      \]
+    \item Orthogonal moment is
+      \[
+        \frac{1}{n}\sum \tilde D_i \big(\tilde Y_i - \theta\,\tilde D_i\big) = 0.
+      \]
+      Equivalently:
+      \[
+        \tilde Y_i = \theta\,\tilde D_i + \text{error},
+        \qquad \mathbb{E}[\tilde D_i \cdot \text{error}] = 0.
+      \]
+    \item Estimator:
+      \[
+        \tilde\theta
+        = \frac{\sum \tilde D_i \tilde Y_i}{\sum \tilde D_i^2}.
+      \]
+    \item This is simply OLS of residualized outcome on residualized treatment.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Residual interpretation \& IV-style view (2/2)}
+  \begin{itemize}
+    \item Recall the DML estimator:
+      \[
+        \tilde\theta = \frac{\sum \tilde D_i \tilde Y_i}{\sum \tilde D_i^2},
+        \quad \tilde Y_i = Y_i - \hat g(X_i), 
+        \quad \tilde D_i = D_i - \hat m(X_i).
+      \]
+    \item \textbf{IV-style intuition}:
+      \begin{itemize}
+        \item Think of $\tilde D_i = D_i - \hat m(X_i)$ as an ``optimal'' instrument for $D$.
+        \item We regress the residualized outcome $\tilde Y$ on $\tilde D$ using this instrument.
+        \item The variation in $\tilde D_i$ is orthogonal to $X$ by construction.
+      \end{itemize}
+    \item This bridges two worlds:
+      \begin{itemize}
+        \item \textbf{ML}: flexible, high-dimensional residualization via $\hat g$ and $\hat m$
+        \item \textbf{Econometrics}: IV / GMM inference on a low-dimensional parameter $\theta_0$
+      \end{itemize}
+    \item Key insight: ML handles the complex confounding structure; econometric theory protects the causal parameter.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Sample splitting and cross-fitting}
+  \begin{itemize}
+    \item Remaining issue: if we estimate $\hat g,\hat m$ and $\tilde\theta$ on the \emph{same} data,
+      overfitting can create extra terms like
+      \[
+        \frac{1}{\sqrt{n}}\sum V_i(\hat g(X_i) - g_0(X_i)),
+      \]
+      which may not vanish.
+    \item Solution: \textbf{sample splitting + cross-fitting}.
+      \begin{itemize}
+        \item Split data into $K$ folds.
+        \item On each fold $k$, estimate $(\hat g^{(-k)}, \hat m^{(-k)})$ using all other folds.
+        \item Compute residuals and $\tilde\theta^{(k)}$ on fold $k$ only.
+        \item Average over $k$.
+      \end{itemize}
+    \item Conditional on the training folds, nuisance errors and score residuals are nearly independent;
+      remainder terms are controlled by simple variance bounds.
+    \item Cross-fitting also recovers efficiency (we use the whole sample for $\theta_0$).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Algorithm for PLR DML (1/2)}
+  \begin{enumerate}
+    \item Choose ML methods for $g_0(X)$ and $m_0(X)$:
+      \begin{itemize}
+        \item e.g.\ lasso, random forest, boosting, neural nets, ensembles
+      \end{itemize}
+    \item Fix number of folds $K$ (e.g.\ $K=5$).
+    \item Randomly split $\{1,\dots,n\}$ into folds $I_1,\dots,I_K$ of (roughly) equal size.
+    \item For each fold $k = 1,\dots,K$:
+      \begin{enumerate}
+        \item Train $\hat g^{(-k)}, \hat m^{(-k)}$ on data $\{i \notin I_k\}$.
+        \item For each $i \in I_k$, compute
+          \[
+            \tilde Y_i := Y_i - \hat g^{(-k)}(X_i),\quad
+            \tilde D_i := D_i - \hat m^{(-k)}(X_i).
+          \]
+      \end{enumerate}
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Algorithm for PLR DML (2/2)}
+  \begin{enumerate}
+    \setcounter{enumi}{3}
+    \item For each fold $k$:
+      \begin{enumerate}
+        \item On $i \in I_k$, run OLS of $\tilde Y_i$ on $\tilde D_i$ (no intercept):
+          \[
+            \hat\theta^{(k)} := 
+              \frac{\sum_{i\in I_k} \tilde D_i \tilde Y_i}{\sum_{i\in I_k} \tilde D_i^2}.
+          \]
+      \end{enumerate}
+    \item Aggregate:
+      \[
+        \hat\theta_{\text{DML}} := \frac{1}{K}\sum_{k=1}^K \hat\theta^{(k)}.
+      \]
+    \item Estimate asymptotic variance using the empirical influence function, and form CIs in the usual way.
+  \end{enumerate}
+\end{frame}
+
+%------------------------------------------------
+\section{Main Results \& Examples}
+\subsection*{}
+
+\begin{frame}{What double ML delivers (high level)}
+  \begin{itemize}
+    \item Under mild rate conditions on ML nuisances (e.g.\ $\|\hat g - g_0\|,\|\hat m - m_0\| = o_p(1)$
+          and $\varphi_g + \varphi_m > 1/2$):
+      \begin{itemize}
+        \item $\hat\theta_{\text{DML}}$ is $\sqrt{n}$-consistent and asymptotically normal
+        \item Standard Wald CIs are valid
+      \end{itemize}
+    \item Works with a wide range of ML:
+      \begin{itemize}
+        \item Lasso, random forests, boosting, neural nets, generalized additive models, ensembles
+      \end{itemize}
+    \item In PLR and several other settings, the DML estimator is \alert{semiparametrically efficient}
+      (under homoscedasticity).
+    \item The same pattern generalizes:
+      \begin{itemize}
+        \item Define an orthogonal score for your parameter
+        \item Estimate nuisances with ML + cross-fitting
+        \item Solve empirical orthogonal moment for $\theta_0$
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Simulation: prediction vs.\ causal estimation}
+  \begin{itemize}
+    \item Design (Chernozhukov et al.):
+      \begin{itemize}
+        \item $g_0(X)$ built from trees $\Rightarrow$ random forest is (nearly) oracle for prediction
+        \item Treatment equation $D = m_0(X) + V$ with nontrivial confounding
+      \end{itemize}
+    \item Compare two estimators of $\theta_0$:
+      \begin{enumerate}
+        \item Naive ML regression-adjustment (plug-in $\hat g$)
+        \item DML estimator based on orthogonal score + cross-fitting
+      \end{enumerate}
+    \item Findings:
+      \begin{itemize}
+        \item Naive plug-in: excellent out-of-sample prediction of $Y$, but \alert{biased} for $\theta_0$,
+              distribution shifted away from the truth
+        \item DML: distribution of $\hat\theta_{\text{DML}}$ is centered at $\theta_0$ and close to normal
+      \end{itemize}
+    \item Moral: good prediction error is \emph{not} enough; the score must be orthogonal to ML errors.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Application: 401(k) eligibility and savings}
+  \begin{itemize}
+    \item Data: US households, outcome $Y$ = net financial assets; treatment $D$ = 401(k) eligibility.
+    \item High-dimensional covariates $X$ (income, age, education, family status, etc.).
+    \item Identification: treat eligibility as (conditionally) exogenous given $X$.
+    \item DML for the ATE of eligibility:
+      \begin{itemize}
+        \item $g_0(1,X), g_0(0,X)$ estimated with flexible ML
+        \item Orthogonal score for ATE, ML nuisances cross-fitted
+      \end{itemize}
+    \item Result (roughly): substantial positive effect ($\sim \$7$--$9$k), robust across many ML learners.
+    \item Demonstrates: we can combine rich ML adjustment for $X$ with standard errors for the causal effect.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Beyond PLR: ATE, ATTE, PLIV, LATE}
+  \begin{itemize}
+    \item \textbf{ATE / ATTE under unconfoundedness}:
+      \begin{itemize}
+        \item Orthogonal scores combining outcome regression and propensity score
+        \item Same pattern: residuals + cross-fitting
+      \end{itemize}
+    \item \textbf{Partially linear IV model}:
+      \[
+        Y = \theta_0 D + g_0(X) + U,\quad \mathbb{E}[U \mid X,Z]=0,
+      \]
+      \[
+        D = m_0(X,Z) + V,\quad \mathbb{E}[V \mid X,Z]=0.
+      \]
+      \begin{itemize}
+        \item $Z$ affects $Y$ only via $D$ given $X$ (exclusion)
+        \item DML uses an orthogonal score involving $(Y - \theta D - g_0(X))(Z - m_0(X))$
+      \end{itemize}
+    \item \textbf{LATE with binary $D,Z$}:
+      \begin{itemize}
+        \item Orthogonal scores for Wald-type estimands, with ML nuisance functions for $m_0,p_0,\mu_0$.
+      \end{itemize}
+    \item In all cases: low-dimensional $\theta_0$, high-dimensional $\eta_0$, orthogonal score + ML + cross-fitting.
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\section{Critical Discussion \& Takeaways}
+\subsection*{}
+
+\begin{frame}{What DML does \emph{not} fix}
+  \begin{itemize}
+    \item DML relaxes \emph{functional-form} assumptions but assumes:
+      \begin{itemize}
+        \item Correct causal graph / identification:
+          \begin{itemize}
+            \item Unconfoundedness with respect to observed $X$, or
+            \item Valid instruments $Z$ with exclusion restrictions
+          \end{itemize}
+        \item Overlap / positivity (no extreme propensity scores)
+        \item No bad controls (no colliders or mediators in $X$)
+      \end{itemize}
+    \item If key confounders are unobserved, DML cannot repair the resulting bias.
+    \item ML cannot substitute for research design: careful variable selection, timing, instruments, etc.\ still crucial.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Evidence from method evaluation studies}
+  \begin{itemize}
+    \item Method evaluations (e.g.\ simulation studies comparing OLS, naive ML, and DML) highlight: 
+      \begin{itemize}
+        \item With \textbf{linear} confounding, OLS and DML often perform similarly.
+        \item With \textbf{nonlinear} confounding (interactions, thresholds):
+          \begin{itemize}
+            \item DML with very rigid learners (e.g.\ plain lasso on raw $X$) can inherit OLS-like bias.
+            \item DML with flexible learners (RF, boosting, GAMs, nets) can drastically reduce bias.
+          \end{itemize}
+        \item ML choice inside DML matters a lot for finite-sample bias--variance trade-offs.
+      \end{itemize}
+    \item Practical message: the “D” in DML does \emph{not} automatically guarantee good performance; you still need sensible ML.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Checklist \& take-home message}
+  \begin{itemize}
+    \item \textbf{When is DML a good fit?}
+      \begin{itemize}
+        \item Many covariates, complex but plausibly learnable nuisance structure
+        \item Target is low-dimensional (ATE, PLR coefficient, IV effect, LATE)
+        \item Sample size large enough to support flexible ML
+      \end{itemize}
+    \item \textbf{What you should actually do in applied work:}
+      \begin{enumerate}
+        \item Write down the causal estimand and its moment condition.
+        \item Derive (or look up) an orthogonal score for that estimand.
+        \item Choose ML methods rich enough to capture plausible nonlinearities.
+        \item Use cross-fitting; report sensitivity to choice of learner and $K$.
+      \end{enumerate}
+    \item One-sentence takeaway:
+      \begin{itemize}
+        \item \alert{Use ML to learn the nuisance parts, but protect the causal parameter with orthogonal moments and cross-fitting so that ML errors only show up as second-order bias.}
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\end{document}
