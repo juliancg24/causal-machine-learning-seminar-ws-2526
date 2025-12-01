@@ -495,29 +495,21 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Beyond PLR: ATE, ATTE, PLIV, LATE}
+\begin{frame}{Beyond PLR: Interactive \& IV Models}
   \begin{itemize}
-    \item \textbf{ATE / ATTE under unconfoundedness}:
-      \begin{itemize}
-        \item Orthogonal scores combining outcome regression and propensity score
-        \item Same pattern: residuals + cross-fitting
-      \end{itemize}
-    \item \textbf{Partially linear IV model}:
+    \item \textbf{Interactive / nonseparable model (binary $D$)}
       \[
-        Y = \theta_0 D + g_0(X) + U,\quad \mathbb{E}[U \mid X,Z]=0,
-      \]
-      \[
-        D = m_0(X,Z) + V,\quad \mathbb{E}[V \mid X,Z]=0.
+        Y = g_0(D,X) + U, \quad \mathbb{E}[U \mid X,D] = 0
       \]
       \begin{itemize}
-        \item $Z$ affects $Y$ only via $D$ given $X$ (exclusion)
-        \item DML uses an orthogonal score involving $(Y - \theta D - g_0(X))(Z - m_0(X))$
+        \item Fully nonlinear in $(D,X)$, covers heterogeneous effects (ATE, ATTE).
       \end{itemize}
-    \item \textbf{LATE with binary $D,Z$}:
+    \medskip
+    \item \textbf{Same DML recipe extends to:}
       \begin{itemize}
-        \item Orthogonal scores for Wald-type estimands, with ML nuisance functions for $m_0,p_0,\mu_0$.
+        \item Nonseparable treatment models $Y = g_0(D,X) + U$ with binary $D$
+        \item Partially linear IV (PLIV) models with endogenous $D$ and instruments $Z$
       \end{itemize}
-    \item In all cases: low-dimensional $\theta_0$, high-dimensional $\eta_0$, orthogonal score + ML + cross-fitting.
   \end{itemize}
 \end{frame}
 
